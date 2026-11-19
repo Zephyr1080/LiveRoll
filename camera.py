@@ -76,12 +76,13 @@ def record_clip(seconds=5, fps=10):
             if not ok:
                 continue
             if time.time() >= next_grab:
-                frames.append(_shrink(frame))
+                frames.append(_shrink(frame).copy())
                 next_grab += 1.0 / fps
             left = seconds - (time.time() - start)
-            cv2.putText(frame, f"Blink naturally  {left:0.1f}s", (20, 40),
+            preview = frame.copy()                      # draw text on a COPY only
+            cv2.putText(preview, f"Blink naturally  {left:0.1f}s", (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.imshow(window, frame)
+            cv2.imshow(window, preview)
             cv2.waitKey(1)
     finally:
         cap.release()

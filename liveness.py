@@ -18,12 +18,21 @@ def eye_aspect_ratio(eye):
     return vertical / (2.0 * horizontal) if horizontal else 0.0
 
 
+def face_width_ok(chin_points, image_width):
+    """True if the face (jaw width) is big enough. Tiny faces, such as a face
+    shown on a phone screen, give noisy eye landmarks and are rejected."""
+    xs = [p[0] for p in chin_points]
+    return (max(xs) - min(xs)) >= config.MIN_FACE_WIDTH_RATIO * image_width
+
+
 def frame_ear(rgb):
-    """Average EAR of both eyes, or None if there is not exactly one face."""
+    """Average EAR of both eyes, or None if there is not exactly one big enough face."""
     landmarks = face_recognition.face_landmarks(rgb)
     if len(landmarks) != 1:
         return None
     lm = landmarks[0]
+    if not face_width_ok(lm["chin"], rgb.shape[1]):
+        return None
     return (eye_aspect_ratio(lm["left_eye"]) + eye_aspect_ratio(lm["right_eye"])) / 2
 
 
@@ -70,7 +79,7 @@ def check_liveness(frames_bgr):
 
     if face_ratio < config.MIN_FACE_FRAMES:
         return {"live": False, "blinks": 0, "best_frame": best,
-                "reason": "need exactly one clear face in view for most of the clip"}
+                "reason": "need ONE clear, close face for most of the clip (move closer)"}
 
     blinks = count_blinks(ears)
     live = blinks >= config.MIN_BLINKS

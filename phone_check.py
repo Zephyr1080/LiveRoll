@@ -1,4 +1,4 @@
-"""Phone / screen detection with YOLOv8n (pretrained on COCO, class 'cell phone').
+"""Phone / screen detection with YOLOv8n (pretrained on COCO: cell phone, tv, laptop).
 
 If a phone is visible near the face in the clip, the attempt is rejected.
 Limit: it only catches a phone the camera can actually see.
@@ -8,7 +8,6 @@ import cv2
 import face_recognition
 import config
 
-PHONE_CLASS = 67            # 'cell phone' in the COCO dataset
 _model = None
 
 
@@ -43,17 +42,21 @@ def check_phone(frames_bgr):
     n = min(config.PHONE_CHECK_FRAMES, len(frames_bgr))
     for i in np.linspace(0, len(frames_bgr) - 1, n).astype(int):
         frame = frames_bgr[i]
-        res = model.predict(frame, classes=[PHONE_CLASS],
+        if config.PHONE_DEBUG:                       # show everything YOLO sees (low confidence)
+            seen = model.predict(frame, conf=0.1, verbose=False)[0]
+            print("  YOLO saw:", ", ".join(f"{seen.names[int(c)]} {p:.2f}" for c, p in
+                  zip(seen.boxes.cls.tolist(), seen.boxes.conf.tolist())) or "nothing")
+        res = model.predict(frame, classes=config.PHONE_CLASSES,
                             conf=config.PHONE_CONF, verbose=False)[0]
         if res.boxes is None or len(res.boxes) == 0:
             continue
         faces = face_recognition.face_locations(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        for xyxy, conf in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist()):
+        for xyxy, conf, cls in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist()):
             if not faces or any(phone_near_face(xyxy, f) for f in faces):
                 shown = frame.copy()
                 x1, y1, x2, y2 = map(int, xyxy)
                 cv2.rectangle(shown, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                cv2.putText(shown, f"PHONE {conf:.2f}", (x1, max(y1 - 8, 15)),
+                cv2.putText(shown, f"{res.names[int(cls)].upper()} {conf:.2f}", (x1, max(y1 - 8, 15)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                 return {"found": True, "confidence": float(conf), "frame": shown}
     return {"found": False, "confidence": 0.0, "frame": None}

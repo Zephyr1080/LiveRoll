@@ -9,7 +9,7 @@ from faces import register_student
 from attendance import recognize_faces, now_parts, show_results
 from camera import show_image
 from reports import daily_report, show_table
-from liveness import count_blinks
+from liveness import count_blinks, face_width_ok
 
 
 def run_demo():
@@ -58,6 +58,11 @@ def run_liveness_tests():
         rows.append({"Liveness Test": name, "Expected Blinks": expected,
                      "Actual Blinks": got, "Result": "PASS" if got == expected else "FAIL"})
     show_table(pd.DataFrame(rows))
+    # face-size filter (rejects tiny faces such as a face on a phone screen), frame width 480
+    for name, xs, expected in [("Close real face (200px jaw)", (100, 300), True),
+                               ("Tiny face on a phone (40px jaw)", (200, 240), False)]:
+        got = face_width_ok([(x, 0) for x in xs], 480)
+        print(f"  {name}: {'PASS' if got == expected else 'FAIL'}")
 
 
 def run_test_cases():
