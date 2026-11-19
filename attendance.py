@@ -48,35 +48,55 @@ def recognize_faces(image_path, mark=True):
     return recognize_array(cv2.imread(image_path), mark, "Not checked")
 
 
-def _rejected(image, reason):
-    return image, [{"name": "Unknown", "reg_no": None, "status": "Rejected - " + reason}]
+def process_clip(frames):
+    """Run all checks on a recorded clip and mark attendance if everything passes.
 
-
-def live_attendance(frames=None):
-    """Webcam mode: clip -> blink check -> phone check -> recognize -> mark attendance."""
-    if frames is None:
-        frames = record_clip(config.CLIP_SECONDS, config.CLIP_FPS)
+    Returns a dict: image, results (list), liveness (dict or None), phone (dict or None).
+    Used by both the command-line menu and the Streamlit app.
+    """
+    if not frames:
+        raise RuntimeError("No frames were captured from the webcam.")
+    info = {"image": None, "results": [], "liveness": None, "phone": None}
     best = frames[len(frames) // 2]
+
+    def reject(image, reason):
+        info["image"] = image
+        info["results"] = [{"name": "Unknown", "reg_no": None, "status": "Rejected - " + reason}]
+        return info
 
     if config.LIVENESS_ENABLED:
         live = check_liveness(frames)
-        print(f"Liveness: {'PASS' if live['live'] else 'FAIL'} "
-              f"({live['blinks']} blink(s) - {live['reason']})")
+        info["liveness"] = live
         if not live["live"]:
-            return _rejected(live["best_frame"] if live["best_frame"] is not None else frames[0],
-                             live["reason"])
+            return reject(live["best_frame"] if live["best_frame"] is not None else frames[0],
+                          live["reason"])
         best = live["best_frame"]
 
     if config.PHONE_CHECK_ENABLED:
         from phone_check import check_phone          # loaded only when enabled
         phone = check_phone(frames)
+        info["phone"] = phone
+        if phone["found"]:
+            return reject(phone["frame"], "phone/screen detected near face")
+
+    info["image"], info["results"] = recognize_array(
+        best, mark=True, liveness="Verified" if config.LIVENESS_ENABLED else "Not checked")
+    return info
+
+
+def live_attendance(frames=None):
+    """Command-line webcam mode: record clip -> process_clip -> print the steps."""
+    if frames is None:
+        frames = record_clip(config.CLIP_SECONDS, config.CLIP_FPS)
+    info = process_clip(frames)
+    live, phone = info["liveness"], info["phone"]
+    if live:
+        print(f"Liveness: {'PASS' if live['live'] else 'FAIL'} "
+              f"({live['blinks']} blink(s) - {live['reason']})")
+    if phone is not None:
         print("Phone check:", f"FAIL (phone detected, {phone['confidence']:.2f})"
               if phone["found"] else "PASS")
-        if phone["found"]:
-            return _rejected(phone["frame"], "phone/screen detected near face")
-
-    return recognize_array(best, mark=True,
-                           liveness="Verified" if config.LIVENESS_ENABLED else "Not checked")
+    return info["image"], info["results"]
 
 
 def run_attendance_session(students=3):

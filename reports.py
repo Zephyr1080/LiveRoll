@@ -5,9 +5,9 @@ from attendance import now_parts
 
 def daily_report(date=None, save_csv=True):
     date = date or now_parts()[0]
-    df = query_df("SELECT name, reg_no, date, time, status, liveness FROM attendance "
+    df = query_df("SELECT name, reg_no, date, time, status FROM attendance "
                   "WHERE date=? ORDER BY time", (date,))
-    df.columns = ["Student Name", "Registration No", "Date", "Time", "Status", "Liveness"]
+    df.columns = ["Student Name", "Registration No", "Date", "Time", "Status"]
     if save_csv:
         df.to_csv("daily_report.csv", index=False)
     return df
